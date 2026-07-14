@@ -36,8 +36,7 @@ void cycle_result(bool ok)
         partRemoveTimer = 0;
         okShortTimer    = millis();
         systemState     = STATE_OK_ENABLE;
-        Serial.println("[INFO] Part OK — indicator ON for "
-            + String(SMALL_TIME_ON / 1000UL) + " sec");
+        Serial.println("[INFO] Part OK — indicator ON for "+ String(SMALL_TIME_ON / 1000UL) + " sec");
     }
     else
     {
