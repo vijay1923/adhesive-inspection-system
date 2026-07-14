@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-Painted parts need to be inspected automatically before the machine can move on to the next step. The controller must detect part presence, rotate the part for inspection, reject faults immediately, and keep the operator informed with indicators, buzzers, and serial diagnostics.
+Painted parts need to be inspected automatically and removed from the production process before the machine can move on to the next step. The controller must detect part presence, rotate the part for inspection, reject faults immediately, and keep the operator informed with indicators, buzzers, and serial diagnostics.
 
 This project implements that behavior on an ESP32 using two PCF8574 I/O expanders and a stepper driver.
 
@@ -130,7 +130,7 @@ stateDiagram-v2
 
 - **Accuracy:** removal is only accepted once both sensors read HIGH continuously for the full `5 s` settle delay, which filters out bounce or momentary false triggers. Note: the current firmware does **not** check sensor state before starting a cycle — a cycle will start on button press or the `start` command regardless of whether parts are present.
 - **Latency:** sensor faults are latched during the run on the next sensor-check interval, while the final reject/OK decision is made after the full `1700`-pulse cycle completes.
-- **Reliability:** I2C read failures fall back to the last cached input byte instead of crashing the sketch, and the logic avoids blocking delays.
+- **Reliability:** I2C read failures fall back to the last cached input byte instead of crashing the sketch, and the logic avoids blocking delays. During `MACHINE_ENABLE`, if a part is put back (either sensor goes LOW), outputs are cleared immediately and the system returns to `IDLE`.
 
 > Note: these results are derived from the code and timing constants, not from a calibrated production test bench.
 
@@ -146,7 +146,7 @@ Suggested demo assets to add later:
 
 ## How to Run
 
-1. Open `PaintInspection.ino` in the Arduino IDE or VS Code Arduino extension.
+1. Open `main.ino` in the Arduino IDE or VS Code Arduino extension.
 2. Select the ESP32 board and the correct COM port.
 3. Ensure the PCF8574 addresses match the wiring: input `0x25`, output `0x26`.
 4. Upload the sketch to the ESP32.
@@ -192,7 +192,14 @@ Both  Rejects : 0
 
 ```text
 PaintInspection/
-├── PaintInspection.ino      # Main firmware sketch
+├── main.ino                 # Main firmware sketch
+├── config.h                 # Pin map, timing constants, and reject codes
+├── types.h                  # System state and stats types
+├── globals.h                # Runtime globals
+├── pcf_io.h                 # PCF8574 input/output helpers
+├── motor.h                  # Stepper enable/disable helpers
+├── cycle.h                  # State handlers and cycle logic
+├── serial_console.h         # Serial command handling and diagnostics
 ├── readme.md                # Project documentation
 └── build/                   # Generated Arduino build output
     ├── sketch/
