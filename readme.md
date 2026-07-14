@@ -191,7 +191,7 @@ Both  Rejects : 0
 ## Folder Structure
 
 ```text
-PaintInspection/
+Adhesive_inspection/
 ├── main.ino                 # Main firmware sketch
 ├── config.h                 # Pin map, timing constants, and reject codes
 ├── types.h                  # System state and stats types
