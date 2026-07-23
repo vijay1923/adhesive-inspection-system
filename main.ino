@@ -3,8 +3,10 @@
 #include "globals.h"
 #include "pcf_io.h"
 #include "motor.h"
+#include "persist_eeprom.h"
 #include "cycle.h"
 #include "serial_console.h"
+#include "persist_eeprom.h"
 
 void setup()
 {
@@ -30,11 +32,33 @@ void setup()
     Wire.endTransmission();
     Serial.println("PCF Initialized");
 
+    if (persist_begin())
+    {
+        Serial.println("EEPROM persistence initialized");
+    }
+    else
+    {
+        Serial.println("[WARN] EEPROM init failed — reject latch will not survive reboot");
+    }
+
     all_off();
     pcfInputCache = pcf_read();
 
     lastButtonState = (pcfInputCache >> CYCLE_START) & 1;
     lastBypassState = bypass_active(pcfInputCache);
+
+    uint8_t restoredRejectCode = REJECT_NONE;
+    if (persist_is_reject_latched(restoredRejectCode))
+    {
+        lastRejectCode = restoredRejectCode;
+        systemState    = STATE_RESULT_REJECT;
+        buzzers_for_reject(lastRejectCode);
+
+        Serial.print("[BOOT] Restored REJECT latch from EEPROM — Cause: ");
+        Serial.println(reject_str(lastRejectCode));
+        Serial.println("[LOCK] Reject latched - Supervisor bypass key required");
+        return;
+    }
 
     if (bypass_active(pcfInputCache))
     {
