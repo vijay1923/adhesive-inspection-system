@@ -11,6 +11,7 @@ This System uses an Microcontroller to control a stepper motor, read two sensors
 - checks the ring and hub sensors during the run, latches any reject seen, and decides the final result at the end of the full rotation
 - shows an OK indication on the green indicator for `3 s`, waits for removal, then enables the machine relay for a timed window
 - supports bypass mode, reject statistics, and serial diagnostics
+- persists final cycle result (`OK`/`REJECT`) and reject part cause in EEPROM across reboot
 
 ## System Architecture
 
@@ -106,7 +107,8 @@ stateDiagram-v2
 - OK indication on green indicator for `3 s`, then removal wait and machine-enable relay timing
 - Bypass mode that forces relay ON until switched off
 - Reject statistics with `yes` confirmation required before reset
-- Serial diagnostics for status, stats, and control (`help`, `status`, `stats`, `reset_stats`, `start`, `stop`, `boot`)
+- EEPROM-backed reject latch restore at boot (reset/power-cycle cannot bypass reject)
+- Serial diagnostics for status, stats, and control (`help`, `status`, `stats`, `reset_stats`, `start`, `stop`, `boot`, `eeprom`)
 - I2C fallback to cached input on read failure
 - Synchronized dual-buzzer output for `REJECT_BOTH` using a single expander write
 
@@ -131,6 +133,7 @@ stateDiagram-v2
 - **Accuracy:** removal is only accepted once both sensors read HIGH continuously for the full `5 s` settle delay, which filters out bounce or momentary false triggers. Note: the current firmware does **not** check sensor state before starting a cycle — a cycle will start on button press or the `start` command regardless of whether parts are present.
 - **Latency:** sensor faults are latched during the run on the next sensor-check interval, while the final reject/OK decision is made after the full `1700`-pulse cycle completes.
 - **Reliability:** I2C read failures fall back to the last cached input byte instead of crashing the sketch, and the logic avoids blocking delays. During `MACHINE_ENABLE`, if a part is put back (either sensor goes LOW), outputs are cleared immediately and the system returns to `IDLE`.
+- **Reliability:** reject outcome and reject cause are persisted in EEPROM. If the last cycle ended in reject, the controller restores `RESULT_REJECT` at startup and requires bypass-key reset.
 
 > Note: these results are derived from the code and timing constants, not from a calibrated production test bench.
 
@@ -156,8 +159,9 @@ Commands are lowercase, including the reset confirmation (`yes`).
 | `reset_stats` | Ask for confirmation before clearing reject statistics                   |
 | `yes`         | Confirm a pending `reset_stats` action within 10 seconds                 |
 | `start`       | Start a cycle from serial only when the system is `IDLE`                 |
-| `stop`        | Stop the motor, clear outputs, and return to `IDLE`                      |
+| `stop`        | Stop the motor, clear outputs, and return to `IDLE` (blocked in `REJECT`) |
 | `boot`        | Restart the ESP32 (`ESP.restart()`)                                      |
+| `eeprom`      | Print persisted EEPROM latch state (`OK`/`REJECT`) and reject cause      |
 
 ### Example `status` output
 
@@ -191,6 +195,7 @@ Adhesive_inspection/
 ├── motor.h                  # Stepper enable/disable helpers
 ├── cycle.h                  # State handlers and cycle logic
 ├── serial_console.h         # Serial command handling and diagnostics
+├── persist_eeprom.h         # EEPROM persistence for final result/reject latch
 ├── readme.md                # Project documentation
 └── build/                   # Generated Arduino build output
     ├── sketch/
@@ -202,7 +207,7 @@ Adhesive_inspection/
 
 - Add a part-presence check (`S1_IN`/`S2_IN` both LOW) before allowing a cycle to start
 - Add a wiring diagram and real machine photos to the demo section
-- Log cycle history to EEPROM or flash for power-loss persistence
+- Extend EEPROM persistence to include reject stats / cycle history
 - Add debouncing / stronger input filtering for noisy sensors
 - Expose configuration values through serial commands or a simple UI
 - Add a calibration mode for timing and sensor thresholds
@@ -220,9 +225,11 @@ Adhesive_inspection/
 | `[OUT]` | Output state changed |
 | `[TIMER]` | Machine-enable timer expired |
 | `[INFO]` | General state transition or operator guidance |
+| `[LOCK]` | Command/action blocked until supervisor reset condition is met |
 | `[STOP]` | System reset via serial command |
 | `[BYPASS]` | Bypass mode entered or exited |
 | `[CONFIRM]` | Confirmation required for a destructive command |
 | `[TIMEOUT]` | Confirmation window expired |
 | `[CANCELLED]` | A pending confirmation was cancelled by a non-`yes` reply |
 | `[BOOT]` | Startup condition detected (e.g. bypass active at power-on) |
+| `[EEPROM]` | EEPROM persistence state/health output |
