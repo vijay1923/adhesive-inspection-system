@@ -4,12 +4,8 @@
 
 Painted parts need to be inspected automatically and removed from the production process before the machine can move on to the next step. The controller must detect part presence, rotate the part for inspection, reject faults immediately, and keep the operator informed with indicators, buzzers, and serial diagnostics.
 
-This project implements that behavior on an ESP32 using two PCF8574 I/O expanders and a stepper driver.
-
 ## Solution Overview
-
-The firmware is a non-blocking state machine that:
-
+This System uses an Microcontroller to control a stepper motor, read two sensors, and manage outputs.
 - waits in `IDLE` until the cycle-start button is pressed or `start` is sent over serial
 - rotates the part with a stepper motor for exactly `1700` pulses
 - checks the ring and hub sensors during the run, latches any reject seen, and decides the final result at the end of the full rotation
@@ -20,15 +16,15 @@ The firmware is a non-blocking state machine that:
 
 ```mermaid
 flowchart LR
-    OP[Operator / Start Button / Serial] --> ESP32[ESP32 Controller]
-    BYP[Bypass Switch] --> ESP32
+    OP[Operator / Start Button / Serial] --> CONTROLLER
+    BYP[Bypass Switch] --> CONTROLLER
     SENS[Ring + Hub Sensors] --> IN[PCF8574 Input Expander 0x25]
-    IN --> ESP32
-    ESP32 --> OUT[PCF8574 Output Expander 0x26]
+    IN --> CONTROLLER
+    CONTROLLER --> OUT[PCF8574 Output Expander 0x26]
     OUT --> RELAY[Machine Relay]
     OUT --> LED[Green Indicator]
     OUT --> BUZ[Ring / Hub Buzzers]
-    ESP32 --> STEP[Stepper Driver ENA/PUL]
+    CONTROLLER --> STEP[Stepper Driver ENA/PUL]
     STEP --> MOTOR[Stepper Motor]
 ```
 
@@ -46,46 +42,50 @@ stateDiagram-v2
     BYPASS --> IDLE: bypass OFF
 ```
 
-## Hardware/Software Stack
+## Hardware/Software Details
 
 ### Hardware
 
-| Component | Detail |
-|---|---|
-| MCU | ESP32 |
-| I2C SDA | GPIO 21 |
-| I2C SCL | GPIO 22 |
-| Input Expander | PCF8574 @ `0x25` |
-| Output Expander | PCF8574 @ `0x26` |
-| Step Pulse | GPIO 26 |
-| Step Enable | GPIO 27 |
-| Motor Driver | Stepper driver |
+| Component        | Detail                 |
+|------------------|------------------------|
+|IIOT Gateway      | ESP32 Based Controller |
+|Stepper Motor     |                        |
+|Motor Driver      | Stepper driver         |
+|Colour Sensors    | ELCO OSM47             |
+|Push Button       | Cycle start button     |
+|Indicator         | Green LED              |
+|Buzzer            | Red buzzer             |
+|Key Switch        | Bypass switch          |
+|Power Switch      | Main power switch      |
+|Relay Card        | Machine enable relay   |
+|Enclosure Box     | MS enclosure Panel Box |
 
-### PCF8574 input map (`0x25`)
+### input map 
 
-| Bit | Symbol | Signal | Logic |
-|---|---|---|---|
-| 7 | `S1_IN` | Ring sensor | `0` = part present / OK, `1` = removed / fault |
-| 6 | `S2_IN` | Hub sensor | `0` = part present / OK, `1` = removed / fault |
-| 5 | `CYCLE_START` | Cycle start button | `0` = pressed, `1` = released |
-| 4 | `BYPASS_MODE` | Bypass switch | `0` = bypass ON, `1` = normal mode |
+| Input | Symbol         | Signal | Logic |
+|-------|----------------|--------|-------|
+| 7     | `S1_IN`        | Ring sensor | `0` = part present / OK, `1` = removed / fault |
+| 6     | `S2_IN`        | Hub sensor | `0` = part present / OK, `1` = removed / fault |
+| 5     | `CYCLE_START`  | Cycle start button | `0` = pressed, `1` = released |
+| 4     | `BYPASS_MODE`  | Bypass switch | `0` = bypass ON, `1` = normal mode |
 
-### PCF8574 output map (`0x26`)
+###  output map 
 
-| Bit | Symbol | Signal | Detail |
-|---|---|---|---|
-| 0 | `OUT_0` | Relay | Machine enable relay |
-| 1 | `OUT_1` | Spare | Not used |
-| 2 | `OUT_2` | Green indicator | ON during OK-indication, machine-enable, and bypass states |
-| 3 | `OUT_3` | Ring buzzer | Reject alarm for ring-side fault |
-| 4 | `OUT_4` | Hub buzzer | Reject alarm for hub-side fault |
+| Output | Symbol  | Signal           | Detail                                                    |
+|--------|---------|------------------|-----------------------------------------------------------|
+| 0      | `OUT_0` | Relay            | Machine enable relay                                      |
+| 1      | `OUT_1` | Spare            | Not used                                                  |
+| 2      | `OUT_2` | Green indicator  | ON during OK-indication, machine-enable, and bypass states|
+| 3      | `OUT_3` | Ring buzzer      | Reject alarm for ring-side fault                          |
+| 4      | `OUT_4` | Hub buzzer       | Reject alarm for hub-side fault                           |
 
-### Motor driver logic
+### Motor driver 
 
-| ENA pin | State |
-|---|---|
-| LOW | Motor enabled |
-| HIGH | Motor disabled |
+| Pin |Detail            |
+|-----|------------------|
+|ENA  |Stepper enable   |
+|PUL  | Stepper pulse    | 
+|DIR  |Stepper direction | 
 
 ### Software stack
 
@@ -103,7 +103,7 @@ stateDiagram-v2
 - Automatic start from button press or serial command
 - Full-cycle reject collection with final decision after all `1700` pulses
 - Separate reject causes for ring, hub, or both sensors
-- OK indication on green indicator for `3 s`, then removal wait (with debounce-style stable-removal delay), and machine-enable relay timing
+- OK indication on green indicator for `3 s`, then removal wait and machine-enable relay timing
 - Bypass mode that forces relay ON until switched off
 - Reject statistics with `yes` confirmation required before reset
 - Serial diagnostics for status, stats, and control (`help`, `status`, `stats`, `reset_stats`, `start`, `stop`, `boot`)
@@ -114,17 +114,17 @@ stateDiagram-v2
 
 ### Verified behavior from the firmware
 
-| Metric | Value | Notes |
-|---|---:|---|
-| Motor cycle length | `1700` pulses | One full inspection run |
-| Step pulse half-period | `781 µs` | Derived from firmware constant |
-| Approx. step frequency | `~640 Hz` | $f \approx \frac{1}{2 \cdot 781\,\mu s}$ |
-| Sensor polling interval | `20 ms` | PCF8574 input poll rate |
-| Sensor check cadence | every `10` pulses | During active motion |
-| OK indicator window | `3 s` | `SMALL_TIME_ON`, before entering removal wait |
-| Removal settle delay | `5 s` | `PART_REMOVE_STABLE_DELAY`, both sensors must stay HIGH this long before the machine is enabled |
-| Machine-enable window | `30 s` | `MACHINE_ENABLE_TIME`, relay ON after stable removal |
-| Confirmation timeout | `10 s` | Window to send `yes` after `reset_stats` |
+| Metric                  | Value         | Notes                                                               |
+|-------------------------|---------------|---------------------------------------------------------------------|
+| Motor cycle length      | `1700` pulses | One full inspection run                                             |
+| Step pulse half-period  | `781 µs`      | Derived from firmware constant                                      |
+| Approx. step frequency  | `~640 Hz`     | $f \approx \frac{1}{2 \cdot 781\,\mu s}$                            |
+| Sensor polling interval | `20 ms`       | PCF8574 input poll rate                                             |
+| Sensor check cadence    | `10` pulses   | During active motion                                                |
+| OK indicator window     | `3 s`         | before entering removal wait                                        |
+| Removal settle delay    | `5 s`         | both sensors must stay HIGH this long before the machine is enabled |
+| Machine-enable window   | `30 s`        | relay ON after stable removal                                       |
+| Confirmation timeout    | `10 s`        | For reset confirmation                                               |
 
 ### Accuracy / latency / reliability
 
@@ -144,33 +144,24 @@ Suggested demo assets to add later:
 - `docs/status-screen.png` — serial monitor status output
 - `docs/wiring-diagram.png` — hardware wiring reference
 
-## How to Run
-
-1. Open `main.ino` in the Arduino IDE or VS Code Arduino extension.
-2. Select the ESP32 board and the correct COM port.
-3. Ensure the PCF8574 addresses match the wiring: input `0x25`, output `0x26`.
-4. Upload the sketch to the ESP32.
-5. Open the Serial Monitor at **115200 baud**.
-6. Press the cycle-start button or send `start`.
-
 ### Serial commands
 
 Commands are lowercase, including the reset confirmation (`yes`).
 
-| Command | Description |
-|---|---|
-| `help` | Print the list of available commands |
-| `status` | Print current state, sensor readings, pulse count, and last reject cause |
-| `stats` | Print reject statistics only |
-| `reset_stats` | Ask for confirmation before clearing reject statistics |
-| `yes` | Confirm a pending `reset_stats` action within 10 seconds |
-| `start` | Start a cycle from serial only when the system is `IDLE` |
-| `stop` | Stop the motor, clear outputs, and return to `IDLE` |
-| `boot` | Restart the ESP32 (`ESP.restart()`) |
+| Command       | Description                                                              |
+|---------------|--------------------------------------------------------------------------|
+| `help`        | Print the list of available commands                                     |
+| `status`      | Print current state, sensor readings, pulse count, and last reject cause |
+| `stats`       | Print reject statistics only                                             |
+| `reset_stats` | Ask for confirmation before clearing reject statistics                   |
+| `yes`         | Confirm a pending `reset_stats` action within 10 seconds                 |
+| `start`       | Start a cycle from serial only when the system is `IDLE`                 |
+| `stop`        | Stop the motor, clear outputs, and return to `IDLE`                      |
+| `boot`        | Restart the ESP32 (`ESP.restart()`)                                      |
 
 ### Example `status` output
 
-```text
+```text  
 ===== STATUS =====
 State       : RUNNING
 S1 Ring (p7): 0
