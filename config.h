@@ -1,11 +1,11 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// ── Pin & Address Definitions ─────────────────────────────────────────────────
+// ── Pin & Address Definitions 
 #define PIN_SDA 21
 #define PIN_SCL 22
 
-#define IN_PCF  0x25
+#define IN_PCF  0x25    
 #define OUT_PCF 0x26
 
 #define S1_IN       7  // Ring Sensor → PCF pin 7
@@ -38,6 +38,12 @@
 #define PCF_POLL_INTERVAL        20       // ms — poll PCF every N ms
 #define SENSOR_READ_INTERVAL     10       // read sensors every N pulses
 #define CONFIRM_TIMEOUT_MS       10000UL  // ms — serial confirmation timeout
+
+// ── EEPROM Persistence
+#define EEPROM_SIZE_BYTES 64     
+#define EEPROM_STATE_ADDR 0
+#define EEPROM_MAGIC      0xA51D5EEDUL
+#define EEPROM_VERSION    1
 
 
 #endif
