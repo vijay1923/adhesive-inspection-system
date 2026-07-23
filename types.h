@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-// ── System States ─────────────────────────────────────────────────────────────
+// ── System States 
 enum SystemState
 {
     STATE_IDLE,              // system waiting for cycle start
@@ -14,7 +14,7 @@ enum SystemState
     STATE_RESULT_REJECT,     // buzzers ON — waiting for bypass reset
     STATE_BYPASS
 };
-// ── Reject Statistics ───────────────────────────────────────────────────────
+// ── Reject Statistics 
 struct RejectStats
 {
     uint32_t total;
