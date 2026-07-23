@@ -99,6 +99,7 @@ void handleSerialCommands()
         Serial.println("  start        — trigger cycle start");
         Serial.println("  stop         — emergency stop → IDLE");
         Serial.println("  boot         — restart ESP32");
+        Serial.println("  eeprom       — print EEPROM state");
     }
     else if (cmd == "status") { print_status(); }
     else if (cmd == "stats")  { print_stats();  }
