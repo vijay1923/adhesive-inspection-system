@@ -5,8 +5,9 @@
 #include "globals.h"
 #include "pcf_io.h"
 #include "motor.h"
+#include "persist_eeprom.h"
 
-// ── Cycle Start ───────────────────────────────────────────────────────────────
+// ── Cycle Start
 void cycle_start()
 {
     pulseCount       = 0;
@@ -22,7 +23,7 @@ void cycle_start()
     Serial.println("--- Cycle Started ---");
 }
 
-// ── Cycle Result ──────────────────────────────────────────────────────────────
+// ── Cycle Result 
 void cycle_result(bool ok)
 {
     motor_disable();
@@ -30,6 +31,7 @@ void cycle_result(bool ok)
 
     if (ok)
     {
+        persist_save_ok();
         Serial.println("--- Result: OK ---");
         all_off();
         indicator_on();
@@ -49,12 +51,13 @@ void cycle_result(bool ok)
         Serial.println(reject_str(lastRejectCode));
         Serial.println("[INFO] REJECT latched - Supervisor bypass key required to reset");
 
+        persist_save_reject(lastRejectCode);
         buzzers_for_reject(lastRejectCode);  // buzzers ON until bypass reset
         systemState = STATE_RESULT_REJECT;
     }
 }
 
-// ── Bypass ────────────────────────────────────────────────────────────────────
+// ── Bypass 
 void enter_bypass()
 {
     motor_disable();
@@ -73,7 +76,7 @@ void exit_bypass()
     Serial.println("[BYPASS] Mode OFF — Returning to IDLE");
 }
 
-// ── PCF Poll Handler ──────────────────────────────────────────────────────────
+// ── PCF Poll Handler 
 void pcf_poll_handler()
 {
     if (millis() - lastPollTime < PCF_POLL_INTERVAL) return;
@@ -88,7 +91,11 @@ void pcf_poll_handler()
     switch (systemState)
     {
         case STATE_IDLE:
-            if (bypassNow) { enter_bypass(); break; }
+            if (bypassNow) 
+            { 
+                enter_bypass(); 
+                break; 
+            }
             if (btnPressed)
             {
                 Serial.println("[BTN] Cycle Start pressed");
@@ -101,6 +108,8 @@ void pcf_poll_handler()
             if (bypassNow)
             {
                 Serial.println("[RESET] Bypass key reset accepted - returning to IDLE");
+                persist_clear_reject();
+                lastRejectCode = REJECT_NONE;
                 all_off();
                 systemState = STATE_IDLE;
             }
@@ -113,10 +122,13 @@ void pcf_poll_handler()
         case STATE_OK_ENABLE:
         case STATE_WAIT_PART_REMOVE:
         case STATE_MACHINE_ENABLE:
-            break;  // ignore all inputs during OK flow
+        break;  // ignore all inputs during OK flow
 
         case STATE_BYPASS:
-            if (!bypassNow) exit_bypass();
+            if (!bypassNow) 
+            {
+                exit_bypass();
+            }
             break;
 
         case STATE_RUNNING:
@@ -127,7 +139,7 @@ void pcf_poll_handler()
     lastBypassState = bypassNow;
 }
 
-// ── Motor Handler ─────────────────────────────────────────────────────────────
+// ── Motor Handler 
 void motor_handler()
 {
     if (!motorRunning) return;
@@ -181,7 +193,7 @@ void motor_handler()
     }
 }
 
-// ── OK Enable Handler ─────────────────────────────────────────────────────────
+// ── OK Enable Handler 
 void ok_enable_handler()
 {
     if (systemState != STATE_OK_ENABLE) return;
@@ -195,7 +207,7 @@ void ok_enable_handler()
     }
 }
 
-// ── Part Remove Handler ───────────────────────────────────────────────────────
+// ── Part Remove Handler 
 void part_remove_handler()
 {
     if (systemState != STATE_WAIT_PART_REMOVE) return;
@@ -236,7 +248,7 @@ void part_remove_handler()
     }
 }
 
-// ── OK Timer Handler ──────────────────────────────────────────────────────────
+// ── OK Timer Handler 
 void ok_timer_handler()
 {
     if (systemState != STATE_MACHINE_ENABLE) return;
