@@ -6,12 +6,12 @@
 #include "config.h"
 #include "globals.h"
 
-// ── PCF Helpers ───────────────────────────────────────────────────────────────
+// ── PCF Helpers 
 uint8_t pcf_read()
 {
     Wire.requestFrom(IN_PCF, 1);
     if (Wire.available())
-    return Wire.read();
+    return Wire.read();   
     Serial.println("[WARN] I2C read failed — using cache");
     return pcfInputCache;
 }
@@ -29,23 +29,44 @@ void pcf_write(uint8_t val)
     }
 }
 
-void pcf_set_bit(uint8_t bit)   { pcf_write(outputByte |  (1 << bit)); }
-void pcf_clear_bit(uint8_t bit) { pcf_write(outputByte & ~(1 << bit)); }
+void pcf_set_bit(uint8_t bit)    // this function sets a single bit to 1 while preserving all other bits in the output byte
+{ 
+    pcf_write(outputByte |  (1 << bit));  // set bit to 1, preserve all other bits
+} 
+void pcf_clear_bit(uint8_t bit)    // this function clears a single bit to 0 while preserving all other bits in the output byte
+{ 
+    pcf_write(outputByte & ~(1 << bit)); // clear bit to 0, preserve all other bits
+} 
 
-// ── Output Helpers ────────────────────────────────────────────────────────────
-void relay_on()      { pcf_set_bit(OUT_0);   Serial.println("[OUT] Relay ON");      }
-void relay_off()     { pcf_clear_bit(OUT_0); Serial.println("[OUT] Relay OFF");     }
-void indicator_on()  { pcf_set_bit(OUT_2);   Serial.println("[OUT] Indicator ON");  }
-void indicator_off() { pcf_clear_bit(OUT_2); Serial.println("[OUT] Indicator OFF"); }
-void all_off()       { pcf_write(0x00);      Serial.println("[OUT] All OFF");       }
-
-// ── Bypass Check ──────────────────────────────────────────────────────────────
-bool bypass_active(uint8_t input)
-{
-    return !((input >> BYPASS_MODE) & 1);
+// ── Output Helpers 
+void relay_on()      
+{ 
+    pcf_set_bit(OUT_0);   Serial.println("[OUT] Relay ON");      // machine enable 
+}
+void relay_off()     
+{ 
+    pcf_clear_bit(OUT_0); Serial.println("[OUT] Relay OFF");     // machine disable 
+}
+void indicator_on()  
+{ 
+    pcf_set_bit(OUT_2);   Serial.println("[OUT] Indicator ON");  // green indicator ON
+}
+void indicator_off() 
+{ 
+    pcf_clear_bit(OUT_2); Serial.println("[OUT] Indicator OFF");  // green indicator OFF
+}
+void all_off()       
+{ 
+    pcf_write(0x00);      Serial.println("[OUT] All OFF");        // clear all outputs (relay, indicator, buzzers)
 }
 
-// ── Reject Helpers ────────────────────────────────────────────────────────────
+// ── Bypass Check 
+bool bypass_active(uint8_t input)
+{
+    return !((input >> BYPASS_MODE) & 1); // NPN: LOW = bypass ON
+}
+
+// ── Reject Helpers 
 String reject_str(uint8_t code)
 {
     switch (code)
