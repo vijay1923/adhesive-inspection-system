@@ -7,17 +7,19 @@
 #include "pcf_io.h"
 #include "motor.h"
 #include "cycle.h"
-// ── Print Status ──────────────────────────────────────────────────────────────
+#include "persist_eeprom.h"
+
+// ── Print Status 
 void print_status()
 {
-    Serial.println("===== STATUS =====");
+    Serial.println("--------- STATUS ---------");
     Serial.print("State       : ");
     switch (systemState)
     {
         case STATE_IDLE:             Serial.println("IDLE");             break;
         case STATE_RUNNING:          Serial.println("RUNNING");          break;
         case STATE_OK_ENABLE:        Serial.println("OK ENABLE");        break;
-        case STATE_WAIT_PART_REMOVE: Serial.println("WAIT PART REMOVE"); break;
+        case STATE_WAIT_PART_REMOVE: Serial.println("WAIT PART REMOVE"); break; 
         case STATE_MACHINE_ENABLE:   Serial.println("MACHINE ENABLED");  break;
         case STATE_RESULT_REJECT:    Serial.println("REJECT");           break;
         case STATE_BYPASS:           Serial.println("BYPASS MODE");      break;
@@ -29,21 +31,21 @@ void print_status()
     Serial.print("Pulses      : "); Serial.print(pulseCount);
     Serial.print(" / ");            Serial.println(TOTAL_PULSES);
     Serial.print("Last Reject : "); Serial.println(reject_str(lastRejectCode));
-    Serial.println("==================");
+    Serial.println("-------------------");
 }
 
-// ── Print Stats ───────────────────────────────────────────────────────────────
+// ── Print Stats 
 void print_stats()
 {
-    Serial.println("===== REJECT STATS =====");
+    Serial.println(" --------- STATS ----------");
     Serial.print("Total Rejects : "); Serial.println(rejectStats.total);
     Serial.print("Ring  Rejects : "); Serial.println(rejectStats.ring);
     Serial.print("Hub   Rejects : "); Serial.println(rejectStats.hub);
     Serial.print("Both  Rejects : "); Serial.println(rejectStats.both);
-    Serial.println("========================");
+    Serial.println("----------------------------");
 }
 
-// ── Serial Command Handler ────────────────────────────────────────────────────
+// ── Serial Command Handler
 void handleSerialCommands()
 {
     if (awaitingConfirm && millis() - confirmStartTime > CONFIRM_TIMEOUT_MS)
@@ -61,7 +63,7 @@ void handleSerialCommands()
 
     Serial.print("> "); Serial.println(cmd);
 
-    // ── Confirmation response ─────────────────────────────────────────────────
+    // ── Confirmation response 
     if (awaitingConfirm)
     {
         if (cmd == "yes")
@@ -86,7 +88,7 @@ void handleSerialCommands()
         return;
     }
 
-    // ── Commands ──────────────────────────────────────────────────────────────
+    // ── Commands 
     if (cmd == "help")
     {
         Serial.println("Commands:");
@@ -132,6 +134,12 @@ void handleSerialCommands()
     }
     else if (cmd == "stop")
     {
+        if (systemState == STATE_RESULT_REJECT)
+        {
+            Serial.println("[LOCK] Reject latched - Only bypass key can reset");
+            return;
+        }
+
         motor_disable();
         motorRunning    = false;
         awaitingConfirm = false;
@@ -146,11 +154,16 @@ void handleSerialCommands()
         delay(500);
         ESP.restart();
     }
+    else if(cmd== "eeprom")
+    {
+        persist_print_state();
+    }
     else
     {
         Serial.print("[?] Unknown: "); Serial.println(cmd);
         Serial.println("    Type 'help' for command list");
     }
+  
 }
 
 #endif
